@@ -22,6 +22,7 @@ from be.adapters.notify.noop import NoopNotifier
 from be.adapters.payments.base import (
     PaymentProvider,
     SupportsAuthCapture,
+    SupportsCapture,
     SupportsExternalRevenue,
     SupportsTokenize,
 )
@@ -63,6 +64,7 @@ async def test_demo_payment_full_flow() -> None:
     prov = DemoPaymentProvider()
     assert isinstance(prov, PaymentProvider)
     assert isinstance(prov, SupportsAuthCapture)
+    assert isinstance(prov, SupportsCapture)  # SupportsAuthCapture inherits SupportsCapture
     assert isinstance(prov, SupportsTokenize)
     assert isinstance(prov, SupportsExternalRevenue)
     money = Money(amount_minor=2500, currency="ILS")

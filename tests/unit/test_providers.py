@@ -14,8 +14,16 @@ import pytest
 from be.adapters.errors import ProviderConfigError
 from be.adapters.identity.static import StaticIdentityProvider
 from be.adapters.llm.echo import EchoLLMProvider
+from be.adapters.notify.noop import NoopNotifier
+from be.adapters.payments.demo import DemoPaymentProvider
 from be.adapters.storage.local import LocalStorage
-from be.app.providers import build_identity, build_llm, build_storage
+from be.app.providers import (
+    build_identity,
+    build_llm,
+    build_notify,
+    build_payments,
+    build_storage,
+)
 from be.config import get_settings
 
 
@@ -57,6 +65,68 @@ def test_build_storage_gcs_requires_bucket_then_builds() -> None:
         prov = build_storage(_settings(storage_provider="gcs", gcs_bucket="b"))
         assert isinstance(prov, GcsStorage)
         client_cls.assert_called_once()
+
+
+def test_build_payments_resolves_and_rejects() -> None:
+    assert isinstance(build_payments(_settings(payments_provider="demo")), DemoPaymentProvider)
+    with pytest.raises(ProviderConfigError, match="unknown"):
+        build_payments(_settings(payments_provider="nope"))
+
+
+def test_build_payments_tranzila_requires_keys_then_builds() -> None:
+    with pytest.raises(ProviderConfigError, match="TRANZILA_API_PUBLIC_KEY"):
+        build_payments(_settings(payments_provider="tranzila"))
+    with pytest.raises(ProviderConfigError, match="TRANZILA_TERMINAL_NAME"):
+        build_payments(
+            _settings(
+                payments_provider="tranzila",
+                tranzila_api_public_key="p",
+                tranzila_api_secret_key="s",
+            )
+        )
+    from be.adapters.payments.tranzila import TranzilaPaymentProvider
+
+    prov = build_payments(
+        _settings(
+            payments_provider="tranzila",
+            tranzila_api_public_key="p",
+            tranzila_api_secret_key="s",
+            tranzila_terminal_name="term",
+        )
+    )
+    assert isinstance(prov, TranzilaPaymentProvider)
+
+
+def test_build_notify_resolves_and_rejects() -> None:
+    assert isinstance(build_notify(_settings(notify_provider="noop")), NoopNotifier)
+    with pytest.raises(ProviderConfigError, match="unknown"):
+        build_notify(_settings(notify_provider="nope"))
+
+
+def test_build_notify_telegram_requires_token_then_builds() -> None:
+    with pytest.raises(ProviderConfigError, match="TELEGRAM_BOT_TOKEN"):
+        build_notify(_settings(notify_provider="telegram"))
+    from be.adapters.notify.telegram import TelegramNotifier
+
+    prov = build_notify(_settings(notify_provider="telegram", telegram_bot_token="tok"))
+    assert isinstance(prov, TelegramNotifier)
+
+
+def test_build_notify_sanmai_requires_all_channel_creds_then_builds() -> None:
+    from be.adapters.notify.sanmai import SanMaiNotifier
+
+    with pytest.raises(ProviderConfigError):
+        build_notify(_settings(notify_provider="sanmai", telegram_bot_token="tok"))
+    prov = build_notify(
+        _settings(
+            notify_provider="sanmai",
+            telegram_bot_token="tok",
+            gmail_oauth_json="{}",
+            sms_gateway_url="https://g",
+            sms_api_key="k",
+        )
+    )
+    assert isinstance(prov, SanMaiNotifier)
 
 
 def test_build_identity_resolves_and_rejects() -> None:

@@ -56,16 +56,34 @@ class PaymentProvider(ABC):
         """Turn a verified notify event into a settled charge."""
 
 
-class SupportsAuthCapture(ABC):
-    """Optional: an auth-hold + capture split (generic gateways, EMV charge-and-settle)."""
+class SupportsCapture(ABC):
+    """Optional: settle a charge in one blocking step (EMV charge-and-settle).
+
+    No separate authorize — Tranzila has none (card auth happens in the browser
+    iframe hosted page; the EMV Pay Bridge charges-and-settles the physical pinpad
+    in one blocking POST). Providers with a real auth-hold implement the richer
+    :class:`SupportsAuthCapture` instead, which inherits this capability.
+    """
+
+    @abstractmethod
+    async def capture(self, auth_id: str, amount: Money, idem_key: str) -> CaptureResult:
+        """Settle a charge (EMV: charge-and-settle in one blocking step).
+
+        For a charge-and-settle provider ``auth_id`` is the caller's idempotency
+        anchor (e.g. the order id), not a prior authorization handle.
+        """
+
+
+class SupportsAuthCapture(SupportsCapture):
+    """Optional: an auth-hold + capture split (generic gateways with a real hold).
+
+    Inherits :class:`SupportsCapture` so ``isinstance(prov, SupportsCapture)`` is true
+    for both the split and the charge-and-settle case.
+    """
 
     @abstractmethod
     async def authorize(self, amount: Money, token: CardToken, idem_key: str) -> AuthResult:
         """Place an authorization hold for ``amount`` against ``token``."""
-
-    @abstractmethod
-    async def capture(self, auth_id: str, amount: Money, idem_key: str) -> CaptureResult:
-        """Settle a prior authorization (EMV: charge-and-settle in one blocking step)."""
 
 
 class SupportsTokenize(ABC):
@@ -86,6 +104,7 @@ class SupportsExternalRevenue(ABC):
 
 __all__ = [
     "PaymentProvider",
+    "SupportsCapture",
     "SupportsAuthCapture",
     "SupportsTokenize",
     "SupportsExternalRevenue",

@@ -118,6 +118,58 @@ class Settings(BaseSettings):
         description="GCP project id for 'firebase' identity (SANMAI_FIREBASE_PROJECT_ID).",
     )
 
+    # --- payments: tranzila (required only when payments_provider='tranzila') ---
+    tranzila_api_public_key: str | None = Field(
+        default=None,
+        description="Tranzila REST public app-key (SANMAI_TRANZILA_API_PUBLIC_KEY).",
+    )
+    tranzila_api_secret_key: str | None = Field(
+        default=None,
+        description="Tranzila REST private/secret key for HMAC (SANMAI_TRANZILA_API_SECRET_KEY).",
+    )
+    tranzila_terminal_name: str | None = Field(
+        default=None,
+        description="Tranzila terminal/supplier name (SANMAI_TRANZILA_TERMINAL_NAME).",
+    )
+    tranzila_emv_pos_id: str | None = Field(
+        default=None,
+        description="EMV Pay Bridge pos_id for the paired pinpad (SANMAI_TRANZILA_EMV_POS_ID).",
+    )
+    tranzila_paybridge_url: str = Field(
+        default="https://pinpad.tranzila.com/pinpad/PinpadServiceHandler.ashx",
+        description="EMV Pay Bridge CGI URL (SANMAI_TRANZILA_PAYBRIDGE_URL).",
+    )
+
+    # --- notify: telegram / gmail / sms (required per enabled channel) ---
+    telegram_bot_token: str | None = Field(
+        default=None,
+        description="Telegram Bot API token (SANMAI_TELEGRAM_BOT_TOKEN).",
+    )
+    telegram_chat_id: int | None = Field(
+        default=None,
+        description="Default Telegram chat id for approvals (SANMAI_TELEGRAM_CHAT_ID).",
+    )
+    gmail_oauth_json: str | None = Field(
+        default=None,
+        description="Gmail OAuth blob (client_id/secret/refresh_token) (SANMAI_GMAIL_OAUTH_JSON).",
+    )
+    gmail_sender: str | None = Field(
+        default=None,
+        description="Optional verified 'send as' From alias for Gmail (SANMAI_GMAIL_SENDER).",
+    )
+    sms_gateway_url: str | None = Field(
+        default=None,
+        description="SMS gateway endpoint URL (SANMAI_SMS_GATEWAY_URL).",
+    )
+    sms_api_key: str | None = Field(
+        default=None,
+        description="SMS gateway API key (SANMAI_SMS_API_KEY).",
+    )
+    sms_sender_name: str | None = Field(
+        default=None,
+        description="SMS sender/from name (SANMAI_SMS_SENDER_NAME).",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

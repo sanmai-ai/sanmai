@@ -20,6 +20,10 @@ from be.adapters.identity.base import IdentityProvider
 from be.adapters.identity.static import StaticIdentityProvider
 from be.adapters.llm.base import LLMProvider
 from be.adapters.llm.echo import EchoLLMProvider
+from be.adapters.notify.base import Notifier
+from be.adapters.notify.noop import NoopNotifier
+from be.adapters.payments.base import PaymentProvider
+from be.adapters.payments.demo import DemoPaymentProvider
 from be.adapters.storage.base import Storage
 from be.adapters.storage.local import LocalStorage
 from be.config import Settings
@@ -64,6 +68,85 @@ def build_storage(settings: Settings) -> Storage:
     raise ProviderConfigError(f"unknown storage provider id: {provider_id!r}")
 
 
+def build_payments(settings: Settings) -> PaymentProvider:
+    """Resolve :data:`settings.payments_provider` to a :class:`PaymentProvider`."""
+    provider_id = settings.payments_provider
+    if provider_id == "demo":
+        return DemoPaymentProvider()
+    if provider_id == "tranzila":
+        if not (settings.tranzila_api_public_key and settings.tranzila_api_secret_key):
+            raise ProviderConfigError(
+                "payments provider 'tranzila' requires SANMAI_TRANZILA_API_PUBLIC_KEY "
+                "and SANMAI_TRANZILA_API_SECRET_KEY"
+            )
+        if not settings.tranzila_terminal_name:
+            raise ProviderConfigError(
+                "payments provider 'tranzila' requires SANMAI_TRANZILA_TERMINAL_NAME"
+            )
+        from be.adapters.payments.tranzila import TranzilaPaymentProvider
+
+        return TranzilaPaymentProvider(
+            api_public_key=settings.tranzila_api_public_key,
+            api_secret_key=settings.tranzila_api_secret_key,
+            terminal_name=settings.tranzila_terminal_name,
+            emv_pos_id=settings.tranzila_emv_pos_id,
+            paybridge_url=settings.tranzila_paybridge_url,
+        )
+    raise ProviderConfigError(f"unknown payments provider id: {provider_id!r}")
+
+
+def build_notify(settings: Settings) -> Notifier:
+    """Resolve :data:`settings.notify_provider` to a :class:`Notifier`."""
+    provider_id = settings.notify_provider
+    if provider_id == "noop":
+        return NoopNotifier()
+    if provider_id in ("sanmai", "telegram", "gmail", "sms"):
+        telegram = gmail = sms = None
+        if provider_id in ("sanmai", "telegram"):
+            if not settings.telegram_bot_token:
+                raise ProviderConfigError(
+                    "notify 'telegram' requires SANMAI_TELEGRAM_BOT_TOKEN"
+                )
+            from be.adapters.notify.telegram import TelegramNotifier
+
+            telegram = TelegramNotifier(
+                bot_token=settings.telegram_bot_token,
+                default_chat_id=settings.telegram_chat_id,
+            )
+        if provider_id in ("sanmai", "gmail"):
+            if not settings.gmail_oauth_json:
+                raise ProviderConfigError(
+                    "notify 'gmail' requires SANMAI_GMAIL_OAUTH_JSON"
+                )
+            from be.adapters.notify.gmail import GmailNotifier
+
+            gmail = GmailNotifier(
+                oauth_json=settings.gmail_oauth_json,
+                sender=settings.gmail_sender,
+            )
+        if provider_id in ("sanmai", "sms"):
+            if not (settings.sms_gateway_url and settings.sms_api_key):
+                raise ProviderConfigError(
+                    "notify 'sms' requires SANMAI_SMS_GATEWAY_URL and SANMAI_SMS_API_KEY"
+                )
+            from be.adapters.notify.sms import SmsNotifier
+
+            sms = SmsNotifier(
+                gateway_url=settings.sms_gateway_url,
+                api_key=settings.sms_api_key,
+                sender_name=settings.sms_sender_name or "SanMai",
+            )
+        if provider_id == "sanmai":
+            from be.adapters.notify.sanmai import SanMaiNotifier
+
+            return SanMaiNotifier(telegram=telegram, gmail=gmail, sms=sms)
+        # single-channel deploy: return the one built notifier
+        single = telegram or gmail or sms
+        assert single is not None  # guaranteed by the branches above
+        return single
+    raise ProviderConfigError(f"unknown notify provider id: {provider_id!r}")
+
+
 def build_identity(settings: Settings) -> IdentityProvider:
     """Resolve :data:`settings.identity_provider` to an :class:`IdentityProvider`."""
     provider_id = settings.identity_provider
@@ -80,4 +163,10 @@ def build_identity(settings: Settings) -> IdentityProvider:
     raise ProviderConfigError(f"unknown identity provider id: {provider_id!r}")
 
 
-__all__ = ["build_llm", "build_storage", "build_identity"]
+__all__ = [
+    "build_llm",
+    "build_storage",
+    "build_payments",
+    "build_notify",
+    "build_identity",
+]
