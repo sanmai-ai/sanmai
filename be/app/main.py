@@ -15,10 +15,11 @@ from __future__ import annotations
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
 
+from be.app.domains.inventory import router as inventory_router
 from be.app.domains.menu import router as menu_router
 
 # Registry of domain routers mounted into every app. Add a domain by appending here.
-DOMAIN_ROUTERS: tuple[APIRouter, ...] = (menu_router,)
+DOMAIN_ROUTERS: tuple[APIRouter, ...] = (menu_router, inventory_router)
 
 
 def create_app() -> FastAPI:
