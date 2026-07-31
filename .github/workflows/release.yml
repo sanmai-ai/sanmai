@@ -1,0 +1,58 @@
+name: release
+
+# Fires on semver tags (vX.Y.Z). Every step is a placeholder that echoes the
+# plan — the real build/publish wiring lands with the packaging milestone.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-be-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: plan — build backend container image
+        run: |
+          echo "release ${GITHUB_REF_NAME}: build BE image"
+          echo "  1. docker build -t ghcr.io/sanmai-ai/be:${GITHUB_REF_NAME} be/"
+          echo "  2. run be image smoke test (GET /healthz)"
+          echo "  3. docker push ghcr.io/sanmai-ai/be:${GITHUB_REF_NAME}"
+          echo "  (placeholder — no image built)"
+
+  build-fe-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: plan — build frontend bundle
+        run: |
+          echo "release ${GITHUB_REF_NAME}: build FE bundle"
+          echo "  1. assemble fe/ static bundle"
+          echo "  2. stamp ?v=${GITHUB_REF_NAME} cache-busters"
+          echo "  3. upload bundle artifact"
+          echo "  (placeholder — no bundle built)"
+
+  publish-tf-modules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: plan — publish Terraform modules
+        run: |
+          echo "release ${GITHUB_REF_NAME}: publish TF modules"
+          echo "  1. terraform fmt/validate infra/modules/*"
+          echo "  2. tag modules ${GITHUB_REF_NAME}"
+          echo "  3. publish to the module registry"
+          echo "  (placeholder — nothing published)"
+
+  release-notes:
+    needs: [build-be-image, build-fe-bundle, publish-tf-modules]
+    runs-on: ubuntu-latest
+    steps:
+      - name: plan — assemble release
+        run: |
+          echo "release ${GITHUB_REF_NAME}: all artifacts planned"
+          echo "  would create a GitHub Release with generated notes"
+          echo "  (placeholder)"

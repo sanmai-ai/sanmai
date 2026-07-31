@@ -1,0 +1,65 @@
+# gitleaks configuration for SanMai AI.
+# Extends the upstream default ruleset, then adds project-specific rules and
+# allowlists. CI runs `gitleaks detect` against this file; a planted secret in
+# any tracked file must make the gitleaks job fail.
+
+title = "SanMai AI gitleaks config"
+
+[extend]
+# Start from gitleaks' built-in ruleset (AWS, GCP, Stripe, generic tokens, ...).
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Project-specific rules
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "sanmai-google-api-key"
+description = "Google API key (Gemini / Maps / Firebase)"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+tags = ["google", "api-key"]
+
+[[rules]]
+id = "sanmai-private-key-block"
+description = "PEM private key block"
+regex = '''-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----'''
+tags = ["key", "private"]
+
+[[rules]]
+id = "sanmai-generic-password-assignment"
+description = "Hardcoded password/secret/token assignment"
+regex = '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"][^'"\s]{8,}['"]'''
+tags = ["secret", "generic"]
+[rules.allowlist]
+regexes = [
+  '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"](?:changeme|example|placeholder|redacted|xxx+|your-[a-z-]+|<[^>]+>)['"]''',
+]
+
+[[rules]]
+id = "sanmai-postgres-url-with-password"
+description = "Postgres connection string carrying an inline password"
+regex = '''postgresql(?:\+asyncpg)?:\/\/[^:\/\s]+:[^@\/\s]+@'''
+tags = ["database", "credentials"]
+[rules.allowlist]
+regexes = [
+  '''postgresql(?:\+asyncpg)?:\/\/(?:postgres|user):(?:postgres|password|changeme)@''',
+]
+
+# ---------------------------------------------------------------------------
+# Global allowlist — keep false positives out of CI without weakening scans.
+# ---------------------------------------------------------------------------
+[allowlist]
+description = "Global allowlist for fixtures, docs, and lockfiles"
+paths = [
+  '''(.*/)?\.env\.example$''',
+  '''(.*/)?tests/.*fixtures?/.*''',
+  '''(.*/)?.*\.lock$''',
+  '''(.*/)?poetry\.lock$''',
+  '''(.*/)?uv\.lock$''',
+]
+# Common obviously-fake values used in tests and docs.
+regexes = [
+  '''(?i)fake[-_]?(token|secret|key)''',
+  '''(?i)example[-_.](com|org)''',
+  '''sk-0{8,}''',
+]

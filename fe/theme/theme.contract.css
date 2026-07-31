@@ -1,0 +1,39 @@
+/* theme/theme.contract.css
+ *
+ * THE BRAND THEME CONTRACT.
+ *
+ * Every brand MUST define these CSS custom properties on :root (see
+ * theme/default/brand.css for a neutral, spec-compliant reference).
+ * Application CSS should consume ONLY these tokens (never hardcode brand
+ * colours/fonts), so swapping a brand is a single stylesheet swap.
+ *
+ * This file documents the contract and provides safe fallbacks. It is NOT a
+ * brand: the fallbacks exist only so a page still renders if a brand file
+ * fails to load — they are intentionally dull and must be overridden.
+ *
+ * Required custom properties
+ * --------------------------
+ *   --brand-primary   Primary brand colour (buttons, active states, links).
+ *   --brand-bg        Page/background surface colour.
+ *   --brand-fg        Foreground/text colour that reads on --brand-bg.
+ *   --brand-accent    Secondary accent (highlights, badges, focus rings).
+ *   --brand-font      Primary UI font stack.
+ *   --brand-font-heading  Heading font stack (may equal --brand-font).
+ *
+ * Contract rules
+ * --------------
+ *   1. A brand file MUST set all six properties on :root.
+ *   2. Colours MUST provide sufficient contrast (fg-on-bg, fg-on-primary).
+ *   3. Fonts MUST end in a generic family (serif/sans-serif/monospace).
+ *   4. Do not add app-specific tokens here — keep the contract minimal.
+ */
+
+:root {
+  /* Fallbacks only — override in a brand stylesheet. */
+  --brand-primary: #444444;
+  --brand-bg: #ffffff;
+  --brand-fg: #111111;
+  --brand-accent: #888888;
+  --brand-font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --brand-font-heading: var(--brand-font);
+}

@@ -1,0 +1,126 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # (1) Secret scanning — gitleaks + a defensive grep fallback.
+  #     A planted secret anywhere in the tree must fail this job.
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+          # No license needed for public repos; this keeps forks green.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+      - name: grep-based secret scan (belt-and-suspenders)
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "Scanning tracked files for high-signal secret patterns..."
+          patterns=(
+            'AIza[0-9A-Za-z_-]{35}'
+            '-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----'
+            'postgresql(\+asyncpg)?://[^:/ ]+:[^@/ ]+@'
+            '(?i)(password|secret|token|api[_-]?key)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"' ]{8,}["'"'"']'
+          )
+          # Never scan the scanner's own config/workflow (they legitimately
+          # contain the patterns as regexes).
+          mapfile -t files < <(git ls-files \
+            | grep -vE '(^|/)\.gitleaks\.toml$' \
+            | grep -vE '(^|/)\.github/workflows/ci\.yml$' \
+            | grep -vE '(^|/)\.env\.example$' \
+            | grep -vE '(^|/)tests/.*(fixture|example)')
+          hits=0
+          for pat in "${patterns[@]}"; do
+            if grep -RInE --binary-files=without-match "$pat" -- "${files[@]}" ; then
+              hits=1
+            fi
+          done
+          if [ "$hits" -ne 0 ]; then
+            echo "::error::Potential secret detected by grep fallback scan."
+            exit 1
+          fi
+          echo "grep scan clean."
+
+  # ---------------------------------------------------------------------------
+  # (2) Lint + type-check.
+  # ---------------------------------------------------------------------------
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: ruff
+        run: ruff check .
+      - name: mypy
+        run: mypy be cli
+
+  # ---------------------------------------------------------------------------
+  # (3) Tests — unit + integration + e2e.
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: pytest (unit + integration + e2e)
+        run: pytest -q
+
+  # ---------------------------------------------------------------------------
+  # (4) Additive-only DDL check — a bare DROP in migrations/ must fail here.
+  # ---------------------------------------------------------------------------
+  ddl-additive-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: reject destructive DDL in migrations/
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -d migrations ]; then
+            echo "No migrations/ directory — nothing to check."
+            exit 0
+          fi
+          # Bare DROP (DROP TABLE/COLUMN/INDEX/...) and ALTER ... DROP are
+          # destructive. Only *.sql files are considered.
+          echo "Checking migrations/ for destructive DDL..."
+          if grep -RInE --include='*.sql' \
+               -e '\bDROP[[:space:]]+(TABLE|COLUMN|INDEX|CONSTRAINT|SCHEMA|VIEW|SEQUENCE|TYPE|DATABASE)\b' \
+               -e '\bALTER[[:space:]]+TABLE\b.*\bDROP\b' \
+               migrations/; then
+            echo "::error::Destructive DDL found in migrations/. Migrations must be additive-only."
+            echo "If this is intentional, gate it behind SANMAI_ALLOW_DESTRUCTIVE and remove from migrations/."
+            exit 1
+          fi
+          echo "migrations/ are additive-only."

@@ -1,0 +1,20 @@
+/* theme/default/brand.css
+ *
+ * The "default" brand — neutral, accessible values that fully satisfy the
+ * theme contract (see theme/theme.contract.css). Load AFTER the contract so
+ * these values win over the fallbacks:
+ *
+ *   <link rel="stylesheet" href="/theme/theme.contract.css">
+ *   <link rel="stylesheet" href="/theme/default/brand.css">
+ *
+ * Every property required by the contract is defined here.
+ */
+
+:root {
+  --brand-primary: #1f2937; /* slate-800 */
+  --brand-bg: #ffffff;
+  --brand-fg: #111827; /* gray-900 */
+  --brand-accent: #2563eb; /* blue-600 */
+  --brand-font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --brand-font-heading: var(--brand-font);
+}
