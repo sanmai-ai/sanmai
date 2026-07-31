@@ -26,17 +26,14 @@ jobs:
 
       - name: gitleaks (free binary — the v2 Action requires a paid org license)
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VER=$(curl -sSfL -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
-            | grep -m1 '"tag_name"' | sed -E 's/.*"v?([0-9.]+)".*/\1/')
-          echo "Using gitleaks v$VER"
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
-            | tar -xz gitleaks
-          ./gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
+          VER=8.30.1
+          curl -sSfL -o /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks version
+          /tmp/gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
 
       - name: grep-based secret scan (belt-and-suspenders)
         shell: bash
