@@ -49,6 +49,13 @@ class Settings(BaseSettings):
         ...,
         description="Deployment environment name, e.g. 'dev' | 'test' | 'prod'.",
     )
+    default_venue_id: str = Field(
+        default="default",
+        description=(
+            "Fallback venue id for company-scoped domains that are venue_id-ready "
+            "but not yet multi-venue. Used when a Principal carries no venue scope."
+        ),
+    )
 
     # --- adapter selection (which provider each port binds to) ---
     payments_provider: str = Field(
