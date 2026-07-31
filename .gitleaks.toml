@@ -32,7 +32,9 @@ regex = '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"][^'"\s]{8
 tags = ["secret", "generic"]
 [rules.allowlist]
 regexes = [
-  '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"](?:changeme|example|placeholder|redacted|xxx+|your-[a-z-]+|<[^>]+>)['"]''',
+  # Obvious non-secret placeholder / test-fixture values. Real keys (AIza…, PEM,
+  # postgres URLs) are still caught by the format-specific rules even in tests.
+  '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"](?:changeme|example|placeholder|redacted|xxx+|your-[a-z-]+|<[^>]+>|test[-_][a-z0-9_-]+|dummy[a-z0-9_-]*|fake[a-z0-9_-]*|not-?a-?secret)['"]''',
 ]
 
 [[rules]]
