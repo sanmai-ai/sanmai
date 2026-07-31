@@ -83,6 +83,41 @@ class Settings(BaseSettings):
         description="Identity adapter id, e.g. 'static' | 'firebase'.",
     )
 
+    # --- vendor credentials (OPTIONAL — required only when the matching real provider
+    #     is selected; resolved at provider construction, never at import) ---
+    gemini_api_key: str | None = Field(
+        default=None,
+        description="API key for the 'gemini' LLM provider (SANMAI_GEMINI_API_KEY).",
+    )
+    gemini_model: str = Field(
+        default="gemini-2.5-flash",
+        description="Model id for the 'gemini' LLM provider (SANMAI_GEMINI_MODEL).",
+    )
+    gcs_bucket: str | None = Field(
+        default=None,
+        description="Bucket name for the 'gcs' storage provider (SANMAI_GCS_BUCKET).",
+    )
+    gcs_project: str | None = Field(
+        default=None,
+        description="GCP project for the 'gcs' storage client (SANMAI_GCS_PROJECT).",
+    )
+    gcs_public_base_url: str | None = Field(
+        default=None,
+        description="Optional public base URL for 'gcs' objects (SANMAI_GCS_PUBLIC_BASE_URL).",
+    )
+    firebase_credentials_json: str | None = Field(
+        default=None,
+        description="Inline SA JSON for 'firebase' identity (SANMAI_FIREBASE_CREDENTIALS_JSON).",
+    )
+    firebase_credentials_path: str | None = Field(
+        default=None,
+        description="SA key-file path for 'firebase' identity (SANMAI_FIREBASE_CREDENTIALS_PATH).",
+    )
+    firebase_project_id: str | None = Field(
+        default=None,
+        description="GCP project id for 'firebase' identity (SANMAI_FIREBASE_PROJECT_ID).",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

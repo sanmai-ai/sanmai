@@ -13,6 +13,9 @@ dependencies = [
     "asyncpg>=0.29",
     "greenlet>=3.0",
     "python-multipart>=0.0.9",
+    "google-generativeai>=0.8",
+    "firebase-admin>=6.5",
+    "google-cloud-storage>=2.16",
 ]
 
 [project.optional-dependencies]
