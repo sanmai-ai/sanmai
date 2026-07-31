@@ -52,14 +52,16 @@ regexes = [
 description = "Global allowlist for fixtures, docs, and lockfiles"
 paths = [
   '''(.*/)?\.env\.example$''',
+  '''(.*/)?[^/]+\.example\.[A-Za-z0-9]+$''',
   '''(.*/)?tests/.*fixtures?/.*''',
   '''(.*/)?.*\.lock$''',
   '''(.*/)?poetry\.lock$''',
   '''(.*/)?uv\.lock$''',
 ]
-# Common obviously-fake values used in tests and docs.
+# Common obviously-fake values used in tests, docs, and *.example.* placeholders.
 regexes = [
   '''(?i)fake[-_]?(token|secret|key)''',
   '''(?i)example[-_.](com|org)''',
+  '''(?i)replace[_-]?with[_-][a-z0-9_]+''',
   '''sk-0{8,}''',
 ]

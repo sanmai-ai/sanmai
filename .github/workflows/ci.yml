@@ -24,12 +24,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      - name: gitleaks (free binary — the v2 Action requires a paid org license)
+        shell: bash
         env:
-          GITLEAKS_CONFIG: .gitleaks.toml
-          # No license needed for public repos; this keeps forks green.
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VER=$(curl -sSfL -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"v?([0-9.]+)".*/\1/')
+          echo "Using gitleaks v$VER"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
 
       - name: grep-based secret scan (belt-and-suspenders)
         shell: bash
@@ -48,6 +55,7 @@ jobs:
             | grep -vE '(^|/)\.gitleaks\.toml$' \
             | grep -vE '(^|/)\.github/workflows/ci\.yml$' \
             | grep -vE '(^|/)\.env\.example$' \
+            | grep -vE '\.example\.[A-Za-z0-9]+$' \
             | grep -vE '(^|/)tests/.*(fixture|example)')
           hits=0
           for pat in "${patterns[@]}"; do
