@@ -16,7 +16,7 @@ import pytest
 
 from be.adapters.fiscal.generic import GenericFiscalProfile
 from be.adapters.payments.demo import DemoPaymentProvider
-from be.adapters.types import CardToken, Money, PanRef
+from be.adapters.types import CardToken, Money, PanRef, RefundContext, Tender
 
 
 @pytest.mark.asyncio
@@ -41,13 +41,15 @@ async def test_order_pay_fiscal_refund_compose() -> None:
     assert capture.amount.currency == amount.currency
 
     # 3. the fiscal profile owns the counter — allocate a receipt number.
-    n1 = fiscal.allocate_number("receipt", venue_id="venue-1")
-    n2 = fiscal.allocate_number("receipt", venue_id="venue-1")
+    n1 = await fiscal.allocate_number("receipt", venue_id="venue-1")
+    n2 = await fiscal.allocate_number("receipt", venue_id="venue-1")
     assert isinstance(n1, int) and isinstance(n2, int)
     assert n2 > n1, "fiscal counter must be strictly monotonic"
 
     # 4. refund the capture — money is conserved through the seam.
-    refund = await pay.refund(capture.charge_id, amount, idem_key="idem-ref-1")
+    refund = await pay.refund(
+        capture.charge_id, amount, RefundContext(tender=Tender.CARD_EMV, same_day=True), "idem-ref-1"
+    )
     assert refund.refund_id
     assert refund.amount.amount_minor == amount.amount_minor
     assert refund.amount.currency == amount.currency
@@ -69,9 +71,9 @@ async def test_demo_provider_is_deterministic() -> None:
 @pytest.mark.asyncio
 async def test_fiscal_counter_is_per_kind_and_venue() -> None:
     fiscal = GenericFiscalProfile()
-    r1 = fiscal.allocate_number("receipt", venue_id="v1")
-    i1 = fiscal.allocate_number("invoice", venue_id="v1")
-    r_other = fiscal.allocate_number("receipt", venue_id="v2")
+    r1 = await fiscal.allocate_number("receipt", venue_id="v1")
+    i1 = await fiscal.allocate_number("invoice", venue_id="v1")
+    r_other = await fiscal.allocate_number("receipt", venue_id="v2")
 
     # independent counters do not collide across kinds/venues.
     assert r1 >= 1
