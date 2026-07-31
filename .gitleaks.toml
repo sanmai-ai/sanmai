@@ -31,9 +31,13 @@ description = "Hardcoded password/secret/token assignment"
 regex = '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"][^'"\s]{8,}['"]'''
 tags = ["secret", "generic"]
 [rules.allowlist]
+# Exempt test files from THIS generic "quoted assignment" rule only — test fixtures
+# routinely use dummy values like api_key="test-key". Real secrets are still caught in
+# tests by the format-specific rules (sanmai-google-api-key, PEM, postgres-url) and by
+# gitleaks' default high-entropy ruleset, which are NOT exempted here.
+paths = ['''(.*/)?tests/.*''']
 regexes = [
-  # Obvious non-secret placeholder / test-fixture values. Real keys (AIza…, PEM,
-  # postgres URLs) are still caught by the format-specific rules even in tests.
+  # Obvious non-secret placeholder values anywhere (matched against the assignment).
   '''(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"](?:changeme|example|placeholder|redacted|xxx+|your-[a-z-]+|<[^>]+>|test[-_][a-z0-9_-]+|dummy[a-z0-9_-]*|fake[a-z0-9_-]*|not-?a-?secret)['"]''',
 ]
 
