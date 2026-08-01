@@ -8,14 +8,24 @@ Bearer token into a :class:`Principal` via the identity seam and gate admin rout
 on a claim.
 
 ``ProviderPermanent`` from ``verify_token`` (bad/expired token) maps to **401**;
-a missing admin claim maps to **403**.
+a caller who is not an active admin (or lacks the requested page/venue) maps to **403**.
+
+RBAC is **DB-driven**, not claim-driven: :func:`require_admin` verifies the token via
+the :class:`IdentityProvider` seam, then resolves the resulting :class:`Principal`
+(``uid`` / ``email`` claim) against the ``admin_users`` table. This keeps authorization
+IdentityProvider-agnostic — a token claim carries identity, never authority — and lets
+the HR domain own the trust anchor (see ``migrations/0004_hr.sql``).
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+import json
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import Annotated, Any
 
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from be.adapters.errors import ProviderPermanent
@@ -36,6 +46,7 @@ __all__ = [
     "require_principal",
     "require_admin",
     "get_venue_id",
+    "AdminContext",
     "SettingsDep",
     "PrincipalDep",
     "AdminDep",
@@ -108,25 +119,12 @@ def require_principal(
 PrincipalDep = Annotated[Principal, Depends(require_principal)]
 
 
-def require_admin(principal: PrincipalDep) -> Principal:
-    """Gate admin routes on the ``admin`` claim; missing claim -> HTTP 403."""
-    if not principal.claims.get("admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="admin privilege required",
-        )
-    return principal
-
-
-AdminDep = Annotated[Principal, Depends(require_admin)]
-
-
 def get_venue_id(principal: PrincipalDep, settings: SettingsDep) -> str:
     """Resolve the caller's active venue: first scoped venue, else the default.
 
-    Menu is company-owned/venue-published; today every write lands under one venue,
-    so we thread ``Principal.venues[0]`` when present and fall back to
-    ``settings.default_venue_id``. This keeps the domain venue_id-ready without
+    Company data is venue-published; today every write lands under one venue, so we
+    thread ``Principal.venues[0]`` when present and fall back to
+    ``settings.default_venue_id``. This keeps the domains venue_id-ready without
     building multi-venue routing yet.
     """
     if principal.venues:
@@ -135,3 +133,127 @@ def get_venue_id(principal: PrincipalDep, settings: SettingsDep) -> str:
 
 
 VenueDep = Annotated[str, Depends(get_venue_id)]
+
+
+@dataclass(frozen=True)
+class AdminContext:
+    """An authorized admin caller: verified identity + resolved DB-RBAC grants.
+
+    ``uid`` is kept as the first field so any consumer that only reads ``admin.uid``
+    (menu/inventory routers) is unaffected by the claim-check -> DB-RBAC upgrade.
+    """
+
+    uid: str
+    email: str | None
+    role: str
+    allowed_pages: list[str]
+    venues: list[str] = field(default_factory=list)
+    principal: Principal | None = None
+
+
+# Resolve the verified Principal against the admin_users trust anchor. Match by uid OR
+# email claim (either may be the login identity). allowed_pages is JSON-as-TEXT.
+_ADMIN_LOOKUP = text(
+    """
+    SELECT id, uid, email, role, allowed_pages
+    FROM admin_users
+    WHERE is_active = 1
+      AND (
+        uid = CAST(:uid AS TEXT)
+        OR (CAST(:email AS TEXT) IS NOT NULL AND email = CAST(:email AS TEXT))
+      )
+    ORDER BY id
+    """
+)
+
+_ADMIN_VENUES = text(
+    "SELECT venue_id FROM admin_user_venues WHERE admin_user_id = :admin_user_id"
+)
+
+
+def _parse_pages(value: Any) -> list[str]:
+    """Parse the JSON-as-TEXT allowed_pages column into a list of page keys."""
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    if isinstance(value, str) and value:
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        return [str(v) for v in parsed] if isinstance(parsed, list) else []
+    return []
+
+
+def require_admin(
+    *pages: str,
+) -> Callable[[Principal, AsyncSession, str], Awaitable[AdminContext]]:
+    """Factory -> a dependency that authorizes the caller against ``admin_users``.
+
+    * The token is verified via the :class:`IdentityProvider` seam (bad/expired -> 401).
+    * The resulting :class:`Principal` is looked up in ``admin_users`` by uid/email;
+      no active row -> **403** (this — not a token claim — is what makes a caller admin).
+    * Page gate: ``full_admin`` bypasses; otherwise the caller must hold at least one of
+      *pages* in ``allowed_pages`` (no *pages* = "any active admin") -> else **403**.
+    * Venue gate (single-venue-friendly): ``full_admin`` bypasses; a caller with venue
+      grants may only act in a granted venue; a caller with **no** grants is unrestricted.
+
+    Called with no args at import time to build :data:`AdminDep`; it must not touch the
+    DB until the returned dependency runs.
+    """
+
+    async def _dep(
+        principal: PrincipalDep,
+        session: DbDep,
+        venue_id: VenueDep,
+    ) -> AdminContext:
+        email = principal.claims.get("email")
+        row = (
+            await session.execute(
+                _ADMIN_LOOKUP, {"uid": principal.uid, "email": email}
+            )
+        ).mappings().first()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="admin privilege required",
+            )
+
+        role = str(row["role"])
+        allowed = _parse_pages(row["allowed_pages"])
+
+        if pages and role != "full_admin" and not any(p in allowed for p in pages):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"admin access to '{pages[0]}' required",
+            )
+
+        if role != "full_admin":
+            grants = [
+                r["venue_id"]
+                for r in (
+                    await session.execute(
+                        _ADMIN_VENUES, {"admin_user_id": row["id"]}
+                    )
+                ).mappings().all()
+            ]
+            if grants and venue_id not in grants:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="admin access to this venue is not granted",
+                )
+
+        return AdminContext(
+            uid=principal.uid,
+            email=email,
+            role=role,
+            allowed_pages=allowed,
+            venues=list(principal.venues),
+            principal=principal,
+        )
+
+    return _dep
+
+
+# Page-less gate: any active admin. Menu + inventory routers consume this verbatim
+# (they only read ``admin.uid``), so the claim-check -> DB-RBAC upgrade needs no edits.
+AdminDep = Annotated[AdminContext, Depends(require_admin())]
