@@ -15,6 +15,7 @@ from __future__ import annotations
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
 
+from be.app.domains.forms import router as forms_router
 from be.app.domains.hr import router as hr_router
 from be.app.domains.inventory import router as inventory_router
 from be.app.domains.menu import router as menu_router
@@ -28,6 +29,7 @@ DOMAIN_ROUTERS: tuple[APIRouter, ...] = (
     hr_router,
     scheduling_router,
     tasks_router,
+    forms_router,
 )
 
 
