@@ -1844,13 +1844,39 @@ async def finish_task(
     finished_count = sum(1 for p in parts if p["finished_at"]) + 1
     if finished_count >= task["required_staff"]:
         await session.execute(_SET_TASK_STATUS, {"status": "done", "tid": run_task_id})
-        # BONUS HOOK (payroll domain, DEFERRED): when a completed task is is_bonus
-        # (task["is_bonus"] and task["bonus_amount"]), credit each finisher here —
-        # split via service.split_bonus over the finishers ordered by finished_at,
-        # then wire to payroll.crud + a Notifier approval card. No bonus ledger
-        # table is written in this increment.
+        # BONUS HOOK (payroll domain): a completed is_bonus task credits each finisher.
+        # Split the bonus over the finishers (earliest first, this employee last) and
+        # write one bonus_task_log row each; the payroll crud enforces the double-pay
+        # guard and shares this transaction (commit=False). Notifier approval card is
+        # DEFERRED. Imported lazily so tasks->payroll stays a call-time edge (no cycle).
+        await _credit_bonus_task(session, task=task, parts=parts, finisher=employee_id)
         await _maybe_complete_run(session, run_id=task["run_id"])
     await session.commit()
+
+
+async def _credit_bonus_task(
+    session: AsyncSession, *, task: dict, parts: list[dict], finisher: int
+) -> None:
+    """Credit a just-completed bonus task's split across its finishers (payroll ledger)."""
+    if not task.get("is_bonus") or task.get("bonus_amount") in (None, ""):
+        return
+    from decimal import Decimal
+
+    from be.app.domains.payroll import crud as payroll_crud
+
+    finisher_ids = [p["employee_id"] for p in parts if p["finished_at"]] + [finisher]
+    amount = float(task["bonus_amount"])
+    shares = service.split_bonus(Decimal(str(amount)), len(finisher_ids))
+    for eid, share in zip(finisher_ids, shares, strict=True):
+        await payroll_crud.credit_task_bonus(
+            session,
+            venue_id=task["venue_id"],
+            run_task_id=task["id"],
+            employee_id=eid,
+            amount=float(share),
+            task_title=task.get("title"),
+            commit=False,
+        )
 
 
 async def unstart_task(
@@ -1867,8 +1893,20 @@ async def unstart_task(
 
     if mine["finished_at"]:
         was_done = task["status"] == "done"
-        # BONUS HOOK (payroll, DEFERRED): if this was a completed bonus task, the
-        # payout would be voided here before reopening. No bonus ledger in this increment.
+        # BONUS HOOK (payroll): reopening a completed bonus task voids every finisher's
+        # LIVE payout (voided rows survive for audit; re-completion inserts fresh live
+        # rows). Shares this transaction (commit=False). Imported lazily to avoid a cycle.
+        if was_done and task.get("is_bonus"):
+            from be.app.domains.payroll import crud as payroll_crud
+
+            for p in parts:
+                if p["finished_at"]:
+                    await payroll_crud.void_task_bonus(
+                        session,
+                        run_task_id=task["id"],
+                        employee_id=p["employee_id"],
+                        commit=False,
+                    )
         await _log_event(
             session, venue_id=task["venue_id"], run_task_id=run_task_id, employee_id=employee_id,
             event="reopened",

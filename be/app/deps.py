@@ -32,9 +32,16 @@ from be.adapters.errors import ProviderPermanent
 from be.adapters.identity.base import IdentityProvider
 from be.adapters.llm.base import LLMProvider
 from be.adapters.notify.base import Notifier
+from be.adapters.payroll.base import PayrollProfile
 from be.adapters.storage.base import Storage
 from be.adapters.types import Principal
-from be.app.providers import build_identity, build_llm, build_notify, build_storage
+from be.app.providers import (
+    build_identity,
+    build_llm,
+    build_notify,
+    build_payroll,
+    build_storage,
+)
 from be.config import Settings, get_settings
 from be.db import get_session
 
@@ -44,6 +51,7 @@ __all__ = [
     "get_storage",
     "get_notify",
     "get_identity",
+    "get_payroll",
     "get_session",
     "require_principal",
     "require_admin",
@@ -55,6 +63,7 @@ __all__ = [
     "AdminDep",
     "VenueDep",
     "DbDep",
+    "PayrollDep",
 ]
 
 DbDep = Annotated[AsyncSession, Depends(get_session)]
@@ -86,6 +95,14 @@ def get_notify(settings: SettingsDep) -> Notifier:
 def get_identity(settings: SettingsDep) -> IdentityProvider:
     """Bind the configured :class:`IdentityProvider` for this request."""
     return build_identity(settings)
+
+
+def get_payroll(settings: SettingsDep) -> PayrollProfile:
+    """Bind the configured :class:`PayrollProfile` (pay-computation seam) for this request."""
+    return build_payroll(settings)
+
+
+PayrollDep = Annotated[PayrollProfile, Depends(get_payroll)]
 
 
 def _extract_bearer(authorization: str | None) -> str:

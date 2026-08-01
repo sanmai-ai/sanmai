@@ -70,6 +70,10 @@ class Settings(BaseSettings):
         ...,
         description="Fiscal profile id, e.g. 'generic' | 'il'.",
     )
+    payroll_profile: str = Field(
+        default="generic",
+        description="Payroll pay-computation profile id, e.g. 'generic' | 'il'.",
+    )
     notify_provider: str = Field(
         default="noop",
         description="Notifier adapter id, e.g. 'noop' | 'telegram'.",

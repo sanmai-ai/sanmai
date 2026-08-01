@@ -21,6 +21,7 @@ from be.app.domains.forms import router as forms_router
 from be.app.domains.hr import router as hr_router
 from be.app.domains.inventory import router as inventory_router
 from be.app.domains.menu import router as menu_router
+from be.app.domains.payroll import router as payroll_router
 from be.app.domains.scheduling import router as scheduling_router
 from be.app.domains.suggestions import router as suggestions_router
 from be.app.domains.tasks import router as tasks_router
@@ -32,6 +33,7 @@ DOMAIN_ROUTERS: tuple[APIRouter, ...] = (
     hr_router,
     scheduling_router,
     tasks_router,
+    payroll_router,
     forms_router,
     suggestions_router,
     analytics_router,

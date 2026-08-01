@@ -24,6 +24,8 @@ from be.adapters.notify.base import Notifier
 from be.adapters.notify.noop import NoopNotifier
 from be.adapters.payments.base import PaymentProvider
 from be.adapters.payments.demo import DemoPaymentProvider
+from be.adapters.payroll.base import PayrollProfile
+from be.adapters.payroll.generic import GenericPayrollProfile
 from be.adapters.storage.base import Storage
 from be.adapters.storage.local import LocalStorage
 from be.config import Settings
@@ -147,6 +149,23 @@ def build_notify(settings: Settings) -> Notifier:
     raise ProviderConfigError(f"unknown notify provider id: {provider_id!r}")
 
 
+def build_payroll(settings: Settings) -> PayrollProfile:
+    """Resolve :data:`settings.payroll_profile` to a concrete :class:`PayrollProfile`.
+
+    ``"generic"`` is the locale-neutral OSS default (no overtime tiering); ``"il"``
+    binds the Israeli labor-law profile. Both are dependency- and credential-free.
+    """
+    profile_id = settings.payroll_profile
+    if profile_id == "generic":
+        return GenericPayrollProfile()
+    if profile_id == "il":
+        # Locale profile kept in its own module so IL constants never load unless selected.
+        from be.adapters.payroll.il import IsraeliPayrollProfile
+
+        return IsraeliPayrollProfile()
+    raise ProviderConfigError(f"unknown payroll profile id: {profile_id!r}")
+
+
 def build_identity(settings: Settings) -> IdentityProvider:
     """Resolve :data:`settings.identity_provider` to an :class:`IdentityProvider`."""
     provider_id = settings.identity_provider
@@ -167,6 +186,7 @@ __all__ = [
     "build_llm",
     "build_storage",
     "build_payments",
+    "build_payroll",
     "build_notify",
     "build_identity",
 ]
