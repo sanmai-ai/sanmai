@@ -87,6 +87,23 @@ class Settings(BaseSettings):
         description="Identity adapter id, e.g. 'static' | 'firebase'.",
     )
 
+    # --- CORS (browser cross-origin access) ---
+    cors_origins: str | None = Field(
+        default=None,
+        description=(
+            "Comma-separated list of exact browser Origins allowed to call the API "
+            "(SANMAI_CORS_ORIGINS), e.g. 'https://app.example.com,http://localhost:8000'. "
+            "When unset (and no regex is set) no CORS middleware is mounted."
+        ),
+    )
+    cors_origin_regex: str | None = Field(
+        default=None,
+        description=(
+            "Optional regex matching allowed browser Origins (SANMAI_CORS_ORIGIN_REGEX), "
+            r"e.g. 'https://.*\.pages\.dev' for Cloudflare Pages preview deploys."
+        ),
+    )
+
     # --- analytics (sales pipeline) ---
     analytics_ingest_token: str | None = Field(
         default=None,
@@ -184,6 +201,14 @@ class Settings(BaseSettings):
         default=None,
         description="SMS sender/from name (SANMAI_SMS_SENDER_NAME).",
     )
+
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parsed, whitespace-trimmed list of exact allowed Origins (empty if unset)."""
+        if not self.cors_origins:
+            return []
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)

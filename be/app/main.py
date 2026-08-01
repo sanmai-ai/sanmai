@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
+from starlette.middleware.cors import CORSMiddleware
 
 from be.app.domains.analytics import router as analytics_router
 from be.app.domains.careers import router as careers_router
@@ -43,9 +44,42 @@ DOMAIN_ROUTERS: tuple[APIRouter, ...] = (
 )
 
 
+def _configure_cors(app: FastAPI) -> None:
+    """Mount CORS middleware when configured, so browsers can call the API.
+
+    Config-driven and import-safe: any config failure is swallowed here (it will
+    surface at ``/readyz``) rather than crashing the module-level ``create_app()``.
+    Credentials are OFF (the app authenticates via a Bearer token, not cookies), so
+    a wildcard/regex Origin is safe. When neither exact origins nor a regex are set,
+    no middleware is mounted at all.
+    """
+    try:
+        from be.config import get_settings
+
+        settings = get_settings()
+    except Exception:  # noqa: BLE001 — config errors surface at /readyz, not import
+        return
+
+    origins = settings.cors_origins_list
+    regex = settings.cors_origin_regex
+    if not origins and not regex:
+        return
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_origin_regex=regex,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+
+
 def create_app() -> FastAPI:
     """Build the FastAPI app: probes + all registered domain routers."""
     app = FastAPI(title="SanMai AI Core", version="0.0.0")
+
+    _configure_cors(app)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
