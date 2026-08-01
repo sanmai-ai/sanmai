@@ -31,9 +31,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from be.adapters.errors import ProviderPermanent
 from be.adapters.identity.base import IdentityProvider
 from be.adapters.llm.base import LLMProvider
+from be.adapters.notify.base import Notifier
 from be.adapters.storage.base import Storage
 from be.adapters.types import Principal
-from be.app.providers import build_identity, build_llm, build_storage
+from be.app.providers import build_identity, build_llm, build_notify, build_storage
 from be.config import Settings, get_settings
 from be.db import get_session
 
@@ -41,6 +42,7 @@ __all__ = [
     "get_settings_dep",
     "get_llm",
     "get_storage",
+    "get_notify",
     "get_identity",
     "get_session",
     "require_principal",
@@ -73,6 +75,11 @@ def get_llm(settings: SettingsDep) -> LLMProvider:
 def get_storage(settings: SettingsDep) -> Storage:
     """Bind the configured :class:`Storage` for this request."""
     return build_storage(settings)
+
+
+def get_notify(settings: SettingsDep) -> Notifier:
+    """Bind the configured :class:`Notifier` for this request (best-effort seam)."""
+    return build_notify(settings)
 
 
 def get_identity(settings: SettingsDep) -> IdentityProvider:

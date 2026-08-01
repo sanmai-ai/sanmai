@@ -20,6 +20,7 @@ from be.app.domains.hr import router as hr_router
 from be.app.domains.inventory import router as inventory_router
 from be.app.domains.menu import router as menu_router
 from be.app.domains.scheduling import router as scheduling_router
+from be.app.domains.suggestions import router as suggestions_router
 from be.app.domains.tasks import router as tasks_router
 
 # Registry of domain routers mounted into every app. Add a domain by appending here.
@@ -30,6 +31,7 @@ DOMAIN_ROUTERS: tuple[APIRouter, ...] = (
     scheduling_router,
     tasks_router,
     forms_router,
+    suggestions_router,
 )
 
 
