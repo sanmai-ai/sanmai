@@ -83,6 +83,17 @@ class Settings(BaseSettings):
         description="Identity adapter id, e.g. 'static' | 'firebase'.",
     )
 
+    # --- analytics (sales pipeline) ---
+    analytics_ingest_token: str | None = Field(
+        default=None,
+        description=(
+            "Shared secret for the server-to-server sales-upload path "
+            "(SANMAI_ANALYTICS_INGEST_TOKEN). When set, a matching X-Ingest-Token "
+            "header authorizes an automated upload without an admin Bearer token; "
+            "when unset the header path is disabled (admin auth only)."
+        ),
+    )
+
     # --- vendor credentials (OPTIONAL — required only when the matching real provider
     #     is selected; resolved at provider construction, never at import) ---
     gemini_api_key: str | None = Field(

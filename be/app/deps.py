@@ -47,6 +47,7 @@ __all__ = [
     "get_session",
     "require_principal",
     "require_admin",
+    "authorize_admin",
     "get_venue_id",
     "AdminContext",
     "SettingsDep",
@@ -191,6 +192,61 @@ def _parse_pages(value: Any) -> list[str]:
     return []
 
 
+async def authorize_admin(
+    session: AsyncSession,
+    principal: Principal,
+    venue_id: str,
+    *pages: str,
+) -> AdminContext:
+    """Resolve a verified :class:`Principal` against ``admin_users`` (the trust anchor).
+
+    Shared by :func:`require_admin` and by routes that authorize outside the normal
+    dependency path (e.g. the analytics upload's admin-OR-shared-secret gate). Raises
+    **403** when the caller is not an active admin, lacks a required page, or acts in an
+    ungranted venue.
+    """
+    email = principal.claims.get("email")
+    row = (
+        await session.execute(_ADMIN_LOOKUP, {"uid": principal.uid, "email": email})
+    ).mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin privilege required",
+        )
+
+    role = str(row["role"])
+    allowed = _parse_pages(row["allowed_pages"])
+
+    if pages and role != "full_admin" and not any(p in allowed for p in pages):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"admin access to '{pages[0]}' required",
+        )
+
+    if role != "full_admin":
+        grants = [
+            r["venue_id"]
+            for r in (
+                await session.execute(_ADMIN_VENUES, {"admin_user_id": row["id"]})
+            ).mappings().all()
+        ]
+        if grants and venue_id not in grants:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="admin access to this venue is not granted",
+            )
+
+    return AdminContext(
+        uid=principal.uid,
+        email=email,
+        role=role,
+        allowed_pages=allowed,
+        venues=list(principal.venues),
+        principal=principal,
+    )
+
+
 def require_admin(
     *pages: str,
 ) -> Callable[[Principal, AsyncSession, str], Awaitable[AdminContext]]:
@@ -213,50 +269,7 @@ def require_admin(
         session: DbDep,
         venue_id: VenueDep,
     ) -> AdminContext:
-        email = principal.claims.get("email")
-        row = (
-            await session.execute(
-                _ADMIN_LOOKUP, {"uid": principal.uid, "email": email}
-            )
-        ).mappings().first()
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="admin privilege required",
-            )
-
-        role = str(row["role"])
-        allowed = _parse_pages(row["allowed_pages"])
-
-        if pages and role != "full_admin" and not any(p in allowed for p in pages):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"admin access to '{pages[0]}' required",
-            )
-
-        if role != "full_admin":
-            grants = [
-                r["venue_id"]
-                for r in (
-                    await session.execute(
-                        _ADMIN_VENUES, {"admin_user_id": row["id"]}
-                    )
-                ).mappings().all()
-            ]
-            if grants and venue_id not in grants:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="admin access to this venue is not granted",
-                )
-
-        return AdminContext(
-            uid=principal.uid,
-            email=email,
-            role=role,
-            allowed_pages=allowed,
-            venues=list(principal.venues),
-            principal=principal,
-        )
+        return await authorize_admin(session, principal, venue_id, *pages)
 
     return _dep
 
