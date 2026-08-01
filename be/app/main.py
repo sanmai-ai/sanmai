@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from be.app.domains.analytics import router as analytics_router
 from be.app.domains.careers import router as careers_router
+from be.app.domains.clock import router as clock_router
 from be.app.domains.forms import router as forms_router
 from be.app.domains.hr import router as hr_router
 from be.app.domains.inventory import router as inventory_router
@@ -32,6 +33,7 @@ DOMAIN_ROUTERS: tuple[APIRouter, ...] = (
     inventory_router,
     hr_router,
     scheduling_router,
+    clock_router,
     tasks_router,
     payroll_router,
     forms_router,
